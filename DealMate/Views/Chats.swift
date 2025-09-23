@@ -10,7 +10,9 @@ import SwiftUI
 struct Chats: View {
     
     var body: some View {
-        Text("Hello World!")
+        NavigationStack {
+        
+        }
     }
 }
 

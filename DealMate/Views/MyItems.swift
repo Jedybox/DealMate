@@ -9,6 +9,8 @@ import SwiftUI
 
 struct MyItems: View {
     @State private var items: [String] = ["Steel Series Headset", "Logitech KB"]
+    @State private var showDeleteAlert = false
+    @State private var itemToDelete: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -66,7 +68,9 @@ struct MyItems: View {
                                 Spacer()
                                 
                                 Button(action: {
-                                    // delete action
+                                    // Ask confirmation before deleting
+                                    itemToDelete = item
+                                    showDeleteAlert = true
                                 }) {
                                     Image(systemName: "trash.fill")
                                         .foregroundColor(.white)
@@ -85,9 +89,21 @@ struct MyItems: View {
                 }
             }
             .navigationBarHidden(true)
+            .alert("Are you sure?", isPresented: $showDeleteAlert) {
+                Button("Delete", role: .destructive) {
+                    if let item = itemToDelete,
+                       let index = items.firstIndex(of: item) {
+                        items.remove(at: index)
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This action cannot be undone.")
+            }
         }
     }
 }
+
 
 #Preview {
     MyItems()
