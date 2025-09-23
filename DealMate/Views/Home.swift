@@ -24,7 +24,7 @@ struct Home: View {
 
                     Text("Welcome, \(username)")
                         .font(.custom("Poppins", size: 16))
-                        .foregroundColor(Color(red:28/255, green:139/255, blue:150/255))
+                        .foregroundStyle(Color(red:28/255, green:139/255, blue:150/255))
 
                     Spacer()
 
@@ -52,7 +52,7 @@ struct Home: View {
                 }
             }
         }
-        .ignoresSafeArea()
+        .navigationBarBackButtonHidden(true)
 
     }
 }

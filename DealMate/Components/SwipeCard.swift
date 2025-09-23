@@ -30,7 +30,7 @@ struct SwipeCard: View {
                     .padding(.horizontal)
             }
             .frame(maxWidth: .infinity, maxHeight: 450 * 0.2, alignment: .leading) // fill remaining space
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .background(Color(red: 28/255, green: 139/255, blue: 150/255)) // ixed typo: 155 → 255
             
         }

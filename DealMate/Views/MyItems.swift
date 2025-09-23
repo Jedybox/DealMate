@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct MyItems: View {
+    
     @State private var items: [String] = ["Steel Series Headset", "Logitech KB"]
     @State private var showDeleteAlert = false
     @State private var itemToDelete: String? = nil
@@ -17,30 +18,20 @@ struct MyItems: View {
             VStack(alignment: .leading, spacing: 16) {
                 
                 // Top bar
-                HStack {
-                    Button(action: {
-                        // go back
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(Color(red: 28/255, green: 139/255, blue: 150/255))
-                    }
-                    
-                    Text("My Items")
-                        .font(.custom("Poppins-Bold", size: 20))
-                        .foregroundColor(Color(red: 28/255, green: 139/255, blue: 150/255))
-                    
-                    Spacer()
-                }
-                .padding(.horizontal)
-                .padding(.top, 10)
+                TopBar(page_name: "My Items")
                 
                 // Add button
                 Button(action: {
-                    // add new item
+                    for family in UIFont.familyNames {
+                        print("Font family: \(family)")
+                        for name in UIFont.fontNames(forFamilyName: family) {
+                            print("   \(name)")
+                        }
+                    }
                 }) {
                     Text("+")
                         .font(.title2)
-                        .foregroundColor(Color(red: 28/255, green: 139/255, blue: 150/255))
+                        .foregroundStyle(Color(red: 28/255, green: 139/255, blue: 150/255))
                         .frame(maxWidth: .infinity, minHeight: 40)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)

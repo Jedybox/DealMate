@@ -9,14 +9,14 @@ import SwiftUI
 
 struct Signup: View {
     
+    @Environment(\.dismiss) private var dismiss
+    
     @State private var email: String = ""
     @State private var code: String = ""
     @State private var username: String = ""
     @State private var pass: String = ""
     @State private var re_pass: String = ""
     @State private var count: Int = 1
-    
-    @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationView {
@@ -25,7 +25,7 @@ struct Signup: View {
                 Text("DealMate")
                     .fontWeight(.bold)
                     .font(.custom("Poppins", size: 32))
-                    .foregroundColor(Color(red:28/255, green:139/255, blue:150/255))
+                    .foregroundStyle(Color(red:28/255, green:139/255, blue:150/255))
                     .offset(x:-60)
                 Spacer()
                 
@@ -53,7 +53,7 @@ struct Signup: View {
                 Spacer()
                 Button(action:{
                     if count >= 3 {
-                        count+=1
+                        dismiss()
                     } else {
                         count+=1
                     }
@@ -62,7 +62,7 @@ struct Signup: View {
                         .padding(10)
                         .font(.title2)
                         .frame(maxWidth: 300)
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .background(Color(red:3/255, green:53/255, blue:56/255))
                 }
                 .cornerRadius(12)
