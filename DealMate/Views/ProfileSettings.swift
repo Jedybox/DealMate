@@ -55,7 +55,7 @@ struct ProfileSettings: View {
                                 .scaledToFit()
                                 .frame(width: 20, height: 20)
                             Text("Location: Mayao Crossing, Lucena City")
-                                .font(.custom("Inter-Light", size: 16))
+                                .font(.custom("Inter-Regular_Light", size: 16))
                         }
 
                         HStack {
@@ -64,7 +64,7 @@ struct ProfileSettings: View {
                                 .scaledToFit()
                                 .frame(width: 20, height: 20)
                             Text("Radius: \(radius)km")
-                                .font(.custom("Inter-Light", size: 16))
+                                .font(.custom("Inter-Regular_Light", size: 16))
                         }
 
                         Button(action: {
