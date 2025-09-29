@@ -26,27 +26,25 @@ struct ContentView: View {
                 PField(placeHolder: "Enter password", val: $pass)
                 
                 Spacer()
-                NavigationLink(destination: Home(), label: {
+                NavigationLink(destination: Home()) {
                     Text("Login")
                         .padding(10)
                         .font(.custom("Poppins", size: 22))
                         .frame(maxWidth: 300)
                         .foregroundColor(.white)
                         .background(Color(red:3/255, green:53/255, blue:56/255))
-                })
+                }
                 .cornerRadius(12)
                 .padding()
-                NavigationLink(destination: Signup(), label: {
+                NavigationLink(destination: Signup()) {
                     Text("Sign-Up")
                         .font(.custom("Poppins", size: 16))
                         .foregroundColor(Color(red:3/255, green:53/255, blue:56/255))
-                })
+                }
                 Spacer()
             }
         }
     }
-
-    
 }
 
 #Preview {

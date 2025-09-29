@@ -17,21 +17,35 @@ struct CardDetail: View {
                 .scaledToFill()
                 .frame(height: 300)
                 .clipped()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(card.title)
-                    .font(.custom("Poppins-Bold", size: 22))
-                    .padding(.top)
-                Text(card.owner_name)
-                    .font(.custom("Poppins", size: 16))
-                Spacer()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(card.title)
+                        .font(.custom("Poppins-Bold", size: 28))
+                        .padding(.top)
+                    HStack {
+                        Image("pfp")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 40)
+                            .clipShape(Circle())
+                        
+                        Text(card.owner_name)
+                            .font(.custom("Poppins", size: 16))
+                        
+                    }
+                    .padding(.vertical)
+                    Text(card.description)
+                        .padding(.horizontal)
+                }
+                
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(red: 28/255, green: 139/255, blue: 150/255))
             .foregroundStyle(.white)
             .cornerRadius(25, corners: [.topLeft, .topRight])
-
+            .scrollIndicators(.hidden)
             
         }
         .ignoresSafeArea(edges: [.top, .bottom])
@@ -61,3 +75,7 @@ struct RoundedCorner: Shape {
     }
 }
 
+#Preview {
+    CardDetail(card: Card(imageName: "item", title: "Guitar", owner_name: "Manong raider",
+                         description: "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos.Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat. In id cursus mi pretium tellus duis convallis. Tempus leo eu aenean sed diam urna tempor. Pulvinar vivamus fringilla lacus nec metus bibendum egestas. Iaculis massa nisl malesuada lacinia integer nunc posuere. Ut hendrerit semper vel class aptent taciti sociosqu. Ad litora torquent per conubia nostra inceptos himenaeos."))
+}
