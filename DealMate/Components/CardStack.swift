@@ -9,7 +9,7 @@ import SwiftUI
 
 struct CardStack: View {
     @State private var cards = [
-        Card(imageName: "item", title: "Mechanical Keyboard", owner_name: "Joe Ytac", description: ""),
+        Card(imageName: "item", title: "Guitar", owner_name: "Joe Ytac", description: ""),
         Card(imageName: "pfp", title: "Item 2", owner_name: "time", description: ""),
         Card(imageName: "pfp", title: "Item 3", owner_name: "time", description: "")
     ]
