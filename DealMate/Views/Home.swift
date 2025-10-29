@@ -8,13 +8,15 @@
 import SwiftUI
 
 struct Home: View {
+    @Binding var isLoggedIn: Bool
+    @Binding var navPath: NavigationPath
+    
     @State private var username: String = "Jhon"
     
     var body: some View {
-        NavigationStack {
             VStack {
                 HStack {
-                    NavigationLink(destination: ProfileSettings()) {
+                    NavigationLink(destination: ProfileSettings(isLoggedIn: $isLoggedIn)) {
                         Image("pfp")
                             .resizable()
                             .scaledToFit()
@@ -35,7 +37,7 @@ struct Home: View {
                             .frame(width: 25)
                     }
                 }
-                .padding(.horizontal) 
+                .padding(.horizontal)
                 
                 Spacer()
                 CardStack()
@@ -51,12 +53,16 @@ struct Home: View {
                         .offset(y:10)
                 }
             }
+            .navigationBarBackButtonHidden(true)
         }
-        .navigationBarBackButtonHidden(true)
-
+        
+    
+    func loadItems() {
+        let endpoint = "https://dealmatebackend.vercel.app/api/auth/login"
+        
+        
     }
+
 }
 
-#Preview {
-    Home()
-}
+

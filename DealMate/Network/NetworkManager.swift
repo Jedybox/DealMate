@@ -7,14 +7,9 @@
 
 import Foundation
 
-struct User: Codable, Identifiable {
-    let id: String
-    let username: String
-    
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
-        case username
-    }
+// The User model was moved to Models/User.swift to avoid duplicate type definitions.
+
+// Placeholder for future network helpers
+struct NetworkManager {
+    // Add shared network helpers here if needed in the future.
 }
-
-

@@ -1,17 +1,24 @@
-//
-//  MyItems.swift
-//  DealMate
-//
-//  Created by Jhon Ericsson Ytac on 9/22/25.
-//
-
 import SwiftUI
+import PhotosUI
+
+// MARK: - Item Model
+struct Item: Identifiable, Hashable {
+    let id = UUID()
+    var name: String
+    var description: String
+    var image: UIImage?
+}
 
 struct MyItems: View {
     
-    @State private var items: [String] = ["Steel Series Headset", "Logitech KB"]
+    @State private var items: [Item] = [
+//        Item(name: "Steel Series Headset", description: "Gaming headset", image: UIImage(named: "pfp")),
+//        Item(name: "Logitech KB", description: "Mechanical keyboard", image: UIImage(named: "pfp"))
+    ]
+    
     @State private var showDeleteAlert = false
-    @State private var itemToDelete: String? = nil
+    @State private var itemToDelete: Item? = nil
+    @State private var showAddSheet = false
 
     var body: some View {
         NavigationStack {
@@ -22,12 +29,7 @@ struct MyItems: View {
                 
                 // Add button
                 Button(action: {
-                    for family in UIFont.familyNames {
-                        print("Font family: \(family)")
-                        for name in UIFont.fontNames(forFamilyName: family) {
-                            print("   \(name)")
-                        }
-                    }
+                    showAddSheet = true
                 }) {
                     Text("+")
                         .font(.title2)
@@ -39,27 +41,49 @@ struct MyItems: View {
                         )
                 }
                 .padding(.horizontal)
+                .sheet(isPresented: $showAddSheet) {
+                    AddItemSheet { newItem in
+                        items.append(newItem)
+                        showAddSheet = false
+                    } onCancel: {
+                        showAddSheet = false
+                    }
+                    .presentationDetents([.fraction(0.5)])
+                    .presentationDragIndicator(.visible)
+                }
                 
                 // Item list
                 ScrollView {
                     VStack(spacing: 12) {
-                        ForEach(items, id: \.self) { item in
+                        ForEach(items) { item in
                             HStack {
-                                Image("pfp") // replace with item.imageName
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 60, height: 60)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                if let img = item.image {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 60, height: 60)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                } else {
+                                    Rectangle()
+                                        .fill(Color.gray)
+                                        .frame(width: 60, height: 60)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
                                 
-                                Text(item)
-                                    .font(.custom("Poppins", size: 16))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.name)
+                                        .font(.custom("Poppins", size: 16))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                    Text(item.description)
+                                        .font(.custom("Poppins", size: 12))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .lineLimit(2)
+                                }
                                 
                                 Spacer()
                                 
                                 Button(action: {
-                                    // Ask confirmation before deleting
                                     itemToDelete = item
                                     showDeleteAlert = true
                                 }) {
@@ -95,7 +119,106 @@ struct MyItems: View {
     }
 }
 
-
-#Preview {
-    MyItems()
+// MARK: - Add Item Sheet
+struct AddItemSheet: View {
+    @State private var newName = ""
+    @State private var newDescription = ""
+    @State private var selectedImage: UIImage? = nil
+    @State private var selectedItem: PhotosPickerItem? = nil
+    
+    var onAdd: (Item) -> Void
+    var onCancel: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Add New Item")
+                .font(.headline)
+            
+            TextField("Item name", text: $newName)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal)
+            
+            TextField("Description", text: $newDescription)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal)
+            
+            // Image picker
+            PhotosPicker(
+                selection: $selectedItem,
+                matching: .images,
+                photoLibrary: .shared()
+            ) {
+                if let img = selectedImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 100, height: 100)
+                        .overlay(Text("Select Image").font(.caption))
+                }
+            }
+            .onChange(of: selectedItem) { newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        selectedImage = uiImage
+                    }
+                }
+            }
+            
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(10)
+                
+                Button("Add") {
+                    let newItem = Item(name: newName, description: newDescription, image: selectedImage)
+                    onAdd(newItem)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(red: 28/255, green: 139/255, blue: 150/255))
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.horizontal)
+        }
+        .padding()
+    }
 }
+
+
+// MARK: - PhotosPicker Extension
+extension View {
+    func photosPicker(selection: Binding<UIImage?>, matching: PHPickerFilter = .images) -> some View {
+        self.background(
+            PhotosPicker(
+                selection: Binding<PhotosPickerItem?>(
+                    get: { nil }, // always nil; we handle loading manually
+                    set: { newItem in
+                        guard let newItem else { return }
+                        Task {
+                            if let data = try? await newItem.loadTransferable(type: Data.self),
+                               let uiImage = UIImage(data: data) {
+                                selection.wrappedValue = uiImage
+                            }
+                        }
+                    }
+                ),
+                matching: matching,
+                photoLibrary: .shared()
+            ) {
+                EmptyView()
+            }
+            .opacity(0)
+        )
+    }
+}
+
