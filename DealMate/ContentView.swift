@@ -78,6 +78,9 @@ struct ContentView: View {
             let response = try await loginUser()
             print("✅ Login success: \(response.token)")
             
+            username = ""
+            pass = ""
+            
             await MainActor.run {
                 withAnimation(.easeInOut) {
                     isLoggedIn = true
