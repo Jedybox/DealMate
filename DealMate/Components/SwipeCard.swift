@@ -29,9 +29,6 @@ struct SwipeCardView: View {
                 Text(card.title)
                     .font(.custom("Poppins-Bold", size: 22))
                     .padding(.horizontal)
-                Text(card.owner_name)
-                    .font(.custom("Poppins", size: 18))
-                    .padding(.horizontal)
             }
             .frame(maxWidth: .infinity, maxHeight: 450 * 0.2, alignment: .leading)
             .foregroundStyle(.white)

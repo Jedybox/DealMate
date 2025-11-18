@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @AppStorage("token") private var isLoggedIn = false
+    @AppStorage("token") private var token: String = ""
     
     @State public var navPath = NavigationPath()
     @State private var username: String = ""
@@ -10,8 +10,8 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack(path: $navPath) {
-            if isLoggedIn {
-                Home(isLoggedIn: $isLoggedIn, navPath: $navPath)
+            if token != "" {
+                Home(token: $token, navPath: $navPath)
             } else {
                 VStack {
                     Spacer()
@@ -83,7 +83,7 @@ struct ContentView: View {
             
             await MainActor.run {
                 withAnimation(.easeInOut) {
-                    isLoggedIn = true
+                    token = response.token
                 }
             }
         } catch {
@@ -132,4 +132,8 @@ enum Route: Hashable {
     case home
     case signup
     case myItems
+}
+
+#Preview {
+    ContentView()
 }

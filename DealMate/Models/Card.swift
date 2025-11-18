@@ -11,7 +11,6 @@ struct Card: Identifiable, Equatable {
     let id = UUID()
     let imageName: String
     let title: String
-    let owner_name: String
     let description: String
 }
 

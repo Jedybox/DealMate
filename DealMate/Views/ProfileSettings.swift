@@ -10,8 +10,9 @@ import SwiftUI
 struct ProfileSettings: View {
     @Environment(\.dismiss) private var dismiss
     
-    @Binding var isLoggedIn: Bool
+    @Binding var isLoggedIn: String
     
+    @State private var isEditingProfile: Bool = false
     @State private var username: String = "Jhon Eric"
     @State private var email: String = "jhonericsson@example.com"
     @State private var location: String = "Lucena City"
@@ -163,7 +164,7 @@ struct ProfileSettings: View {
                             .padding(.horizontal)
                         }
                 Button(action: {
-                    isLoggedIn = false
+                    isLoggedIn = ""
                     dismiss()
                 }) {
                     Text("Log-out")
@@ -190,5 +191,5 @@ struct ProfileSettings: View {
 }
 
 #Preview {
-    ProfileSettings(isLoggedIn: .constant(true))
+    ProfileSettings(isLoggedIn: .constant("testuser") )
 }
