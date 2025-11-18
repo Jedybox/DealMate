@@ -189,6 +189,6 @@ struct ProfileSettings: View {
     }
 }
 
-//#Preview {
-//    ProfileSettings()
-//}
+#Preview {
+    ProfileSettings(isLoggedIn: .constant(true))
+}

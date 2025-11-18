@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @AppStorage("token") private var isLoggedIn = false
     
-    @State private var navPath = NavigationPath()
+    @State public var navPath = NavigationPath()
     @State private var username: String = ""
     @State private var pass: String = ""
     @State private var isLoading = false // Track loading
@@ -62,7 +62,7 @@ struct ContentView: View {
                 .ignoresSafeArea(.keyboard)
                 .navigationDestination(for: Route.self) { route in
                     if route == .signup {
-                        Signup()
+                        Signup(navPath: $navPath)
                     }
                 }
             }
