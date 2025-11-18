@@ -11,6 +11,7 @@ struct ProfileSettings: View {
     @Environment(\.dismiss) private var dismiss
     
     @Binding var isLoggedIn: String
+    @Binding var pfp: String
     
     @State private var isEditingProfile: Bool = false
     @State private var username: String = "Jhon Eric"
@@ -31,11 +32,27 @@ struct ProfileSettings: View {
                     
                     VStack {
                         
-                        Image("pfp")
-                            .resizable()
-                            .scaledToFit()
+                        if pfp.isEmpty {
+                            Image("default")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 60, height: 60)
+                                .clipShape(Circle())
+                                .padding(8)
+                                .contentShape(Circle())
+                        } else {
+                            AsyncImage(url: URL(string: pfp)) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                            } placeholder: {
+                                ProgressView()
+                            }
+                            .frame(width: 60, height: 60)
                             .clipShape(Circle())
-                            .frame(maxWidth: 150, maxHeight: 150)
+                            .padding(8)
+                            .contentShape(Circle())
+                        }
                         
                         Text(username)
                             .font(.custom("Poppins", size: 26))
@@ -181,6 +198,10 @@ struct ProfileSettings: View {
         .navigationBarBackButtonHidden(true)
     }
     
+    func update_profile() -> Void {
+            let endpoint = "https://dealmate.onrender.com/api/user"
+    }
+    
     func toggleNotif() -> Void {
         if notificationsOn {
             notificationsOn = false
@@ -191,5 +212,5 @@ struct ProfileSettings: View {
 }
 
 #Preview {
-    ProfileSettings(isLoggedIn: .constant("testuser") )
+    ProfileSettings(isLoggedIn: .constant("testuser"), pfp: .constant(""))
 }

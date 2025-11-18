@@ -8,7 +8,8 @@
 import SwiftUI
 
 struct SwipeCardView: View {
-    let card: Card
+    // Use a binding so the view and the detail view see the same `Card` instance (struct value in the array)
+    @Binding var card: Card
     let isTop: Bool
     @Binding var offset: CGSize
     var onRemove: () -> Void
@@ -18,12 +19,22 @@ struct SwipeCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Image(card.imageName)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: 350, maxHeight: 450 * 0.8)
-                .clipped()
-                .shadow(radius: 5)
+            // Prefer the decoded UIImage when available, otherwise fall back to asset name
+            if let uiImage = card.uiImage {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: 350, maxHeight: 450 * 0.8)
+                    .clipped()
+                    .shadow(radius: 5)
+            } else {
+                Image(card.imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: 350, maxHeight: 450 * 0.8)
+                    .clipped()
+                    .shadow(radius: 5)
+            }
 
             VStack(alignment: .leading) {
                 Text(card.title)
@@ -74,9 +85,9 @@ struct SwipeCardView: View {
             : nil
         )
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: offset)
-        // ✅ Modern navigation modifier
+        // ✅ Modern navigation modifier — pass the binding so CardDetail receives updates
         .navigationDestination(isPresented: $showDetail) {
-            CardDetail(card: card)
+            CardDetail(card: $card)
         }
     }
 }

@@ -18,9 +18,13 @@ struct CardStack: View {
             ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
                 let isTop = index == cards.count - 1
 
+                // Pass a binding to the specific card in the array
+                // Note: capture current index in a new let to avoid closure-capture issues
+                let currentIndex = index
+
                 // Let the SwipeCardView handle its own navigation and gestures
                 SwipeCardView(
-                    card: card,
+                    card: $cards[currentIndex],
                     isTop: isTop,
                     offset: isTop ? $dragOffset : .constant(.zero),
                     onRemove: {
@@ -29,6 +33,12 @@ struct CardStack: View {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 cards.remove(at: idx)
                             }
+                        }
+
+                        // Reset the shared drag offset so the next card doesn't inherit the large offset
+                        // Do this on the main queue to ensure SwiftUI observes the change immediately
+                        DispatchQueue.main.async {
+                            dragOffset = .zero
                         }
                     }
                 )

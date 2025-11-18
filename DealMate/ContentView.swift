@@ -1,17 +1,19 @@
+// Swift
 import SwiftUI
 
 struct ContentView: View {
     @AppStorage("token") private var token: String = ""
+    @AppStorage("username") private var username: String = ""
+    @AppStorage("pfp") private var pfp: String = ""
     
     @State public var navPath = NavigationPath()
-    @State private var username: String = ""
     @State private var pass: String = ""
     @State private var isLoading = false // Track loading
 
     var body: some View {
         NavigationStack(path: $navPath) {
             if token != "" {
-                Home(token: $token, navPath: $navPath)
+                Home(token: $token, navPath: $navPath, username: $username, pfp: $pfp)
             } else {
                 VStack {
                     Spacer()
@@ -77,12 +79,15 @@ struct ContentView: View {
         do {
             let response = try await loginUser()
             print("✅ Login success: \(response.token)")
+            print("Response user.username: \(response.user.username ?? "(nil)")")
+            print("Response user.email: \(response.user.email ?? "(nil)")")
             
-            username = ""
             pass = ""
             
             await MainActor.run {
                 withAnimation(.easeInOut) {
+                    // set username first so Home receives it immediately
+                    username = response.user.username ?? response.user.email ?? "User"
                     token = response.token
                 }
             }
@@ -124,7 +129,7 @@ struct loginResponse: Codable {
 
 struct UserDTO: Codable {
     let id: String
-    let name: String?
+    let username: String?
     let email: String?
 }
 
