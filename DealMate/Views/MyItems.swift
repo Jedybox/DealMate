@@ -48,9 +48,12 @@ struct MyItems: View {
                 }
                 .padding(.horizontal)
                 .sheet(isPresented: $showAddSheet) {
+                    // Present AddItemSheet which calls back with a locally-created Item.
+                    // We now POST on the server in the parent via post_items(_:).
                     AddItemSheet { newItem in
-                        items.append(newItem)
-                        showAddSheet = false
+                        Task {
+                            await post_items(newItem)
+                        }
                     } onCancel: {
                         showAddSheet = false
                     }
@@ -178,238 +181,70 @@ struct MyItems: View {
          }
      }
     
-    func deleteItems(at indexSet: IndexSet) {
-        // For each selected index, call the async server delete.
-        let toDelete: [Item] = indexSet.compactMap { (idx: Int) -> Item? in
-            guard items.indices.contains(idx) else { return nil }
-            return items[idx]
+    // Posts a new item — converts image to base64 and uploads inline (no NetworkManager)
+    func post_items(_ newItem: Item) async {
+        await MainActor.run { isLoading = true; loadError = nil }
+
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedToken.isEmpty else {
+            await MainActor.run { loadError = "You must be logged in to post an item."; isLoading = false }
+            return
         }
 
-        for item in toDelete {
-            Task.detached {
-                await deleteItem(item)
+        // Prepare image payload: either base64 string or empty string when no image provided
+        var imageBase64String: String = ""
+
+        if let uiImage = newItem.image {
+            // Simply convert to JPEG at reasonable quality and base64-encode. No compression/resizing performed.
+            guard let jpegData = uiImage.jpegData(compressionQuality: 0.8) else {
+                await MainActor.run { loadError = "Failed to encode image."; isLoading = false }
+                return
             }
+            imageBase64String = jpegData.base64EncodedString()
+        } else {
+            // No image selected: send empty string as requested
+            imageBase64String = ""
         }
-    }
-    
-    func getItems() async {
-        let end_point = "https://dealmatebackend.vercel.app/api/item/"
-        
-        await MainActor.run { isLoading = true; loadError = nil }
-        
-        guard let url = URL(string: end_point) else {
+
+        // Build request inline
+        guard let url = URL(string: "https://dealmatebackend.vercel.app/api/item/") else {
             await MainActor.run { loadError = "Invalid URL"; isLoading = false }
             return
         }
-        
+
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("application/json", forHTTPHeaderField: "Accept")
-        if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
+        request.addValue("Bearer \(trimmedToken)", forHTTPHeaderField: "Authorization")
+
+        let bodyDict: [String: Any] = [
+            "name": newItem.name,
+            "description": newItem.description,
+            "image": imageBase64String
+        ]
+
         do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: bodyDict, options: [])
+
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
-            
-            guard (200...299).contains(http.statusCode) else {
-                let txt = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
-                await MainActor.run { loadError = txt; isLoading = false }
-                return
-            }
-            
-            // Robust APIItem decoder: accepts `id` or `_id`, string/int, or nested {$oid: "..."}
-            struct APIItem: Decodable {
-                let id: String?
-                let name: String?
-                let description: String?
-                let imageBase64: String?
-                let image: String?
+            guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
 
-                init(from decoder: Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
+            let respText = String(data: data, encoding: .utf8) ?? "(no body)"
+            print("MyItems: POST response status=\(http.statusCode) body=\(respText)")
 
-                    func decodeId(_ key: CodingKeys) -> String? {
-                        // Try decode String safely
-                        var maybeString: String? = nil
-                        do {
-                            maybeString = try container.decodeIfPresent(String.self, forKey: key)
-                        } catch {
-                            maybeString = nil
-                        }
-                        if let s = maybeString, !s.isEmpty {
-                            return s.trimmingCharacters(in: .whitespacesAndNewlines)
-                        }
-
-                        // Try decode Int safely
-                        var maybeInt: Int? = nil
-                        do {
-                            maybeInt = try container.decodeIfPresent(Int.self, forKey: key)
-                        } catch {
-                            maybeInt = nil
-                        }
-                        if let i = maybeInt {
-                            return String(i)
-                        }
-
-                        // Try nested object like { "$oid": "..." }
-                        var nestedContainer: KeyedDecodingContainer<DynamicKey>? = nil
-                        do {
-                            nestedContainer = try container.nestedContainer(keyedBy: DynamicKey.self, forKey: key)
-                        } catch {
-                            nestedContainer = nil
-                        }
-                        if let nested = nestedContainer, let dyn = DynamicKey(stringValue: "$oid") {
-                            var maybeOid: String? = nil
-                            do {
-                                maybeOid = try nested.decodeIfPresent(String.self, forKey: dyn)
-                            } catch {
-                                maybeOid = nil
-                            }
-                            if let oid = maybeOid, !oid.isEmpty {
-                                return oid.trimmingCharacters(in: .whitespacesAndNewlines)
-                            }
-                        }
-
-                        return nil
-                    }
-
-                    var found = decodeId(.id)
-                    if found == nil { found = decodeId(.underscoreId) }
-                    self.id = found
-
-                    self.name = try? container.decodeIfPresent(String.self, forKey: .name)
-                    self.description = try? container.decodeIfPresent(String.self, forKey: .description)
-                    self.imageBase64 = try? container.decodeIfPresent(String.self, forKey: .imageBase64)
-                    self.image = try? container.decodeIfPresent(String.self, forKey: .image)
-                }
-
-                struct DynamicKey: CodingKey {
-                    var stringValue: String
-                    init?(stringValue: String) { self.stringValue = stringValue }
-                    var intValue: Int? { nil }
-                    init?(intValue: Int) { nil }
-                }
-
-                enum CodingKeys: String, CodingKey {
-                    case id
-                    case underscoreId = "_id"
-                    case name, description, imageBase64, image
-                }
-            }
-
-            let decoder = JSONDecoder()
-
-            // Debug: print raw response preview
-            if let raw = String(data: data, encoding: .utf8) {
-                print("MyItems: raw response preview -> \(raw.prefix(2000))")
-            }
-
-            // Try decoding array directly; if that fails try common wrappers
-            var apiItems: [APIItem] = []
-            if let arr = try? decoder.decode([APIItem].self, from: data) {
-                apiItems = arr
-            } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                let keys = ["data","items","result","payload"]
-                for k in keys {
-                    if let arrAny = json[k] as? [[String: Any]], let arrData = try? JSONSerialization.data(withJSONObject: arrAny), let decoded = try? decoder.decode([APIItem].self, from: arrData) {
-                        apiItems = decoded
-                        break
-                    }
-                }
-            }
-
-            if apiItems.isEmpty { print("MyItems: warning - no items decoded from response") }
-
-            var mapped: [Item] = []
-            for api in apiItems {
-                let title = api.name ?? "Untitled"
-                let desc = api.description ?? ""
-                var uiImage: UIImage? = nil
-                var imageSource: String? = nil
-
-                if let src = (api.imageBase64 ?? api.image)?.trimmingCharacters(in: .whitespacesAndNewlines), !src.isEmpty {
-                    imageSource = src
-                    if !(src.lowercased().contains("://")) {
-                        uiImage = Base64ImageConverter.image(from: src)
-                    }
-                }
-
-                mapped.append(Item(itemId: api.id, name: title, description: desc, image: uiImage, imageSource: imageSource))
-                print("MyItems: mapped item -> itemId=\(api.id ?? "(nil)"), name=\(title)")
-            }
-            
-            await MainActor.run {
-                self.items = mapped
-                self.isLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                self.loadError = error.localizedDescription
-                self.isLoading = false
-            }
-        }
-    }
-    
-    // Deletes an item on the server (if it has an itemId). On success removes it from the local list.
-    func deleteItem(_ item: Item) async {
-        // If no item ID, just remove locally
-        guard let rawItemId = item.itemId, !rawItemId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            await MainActor.run {
-                if let idx = items.firstIndex(of: item) {
-                    items.remove(at: idx)
-                }
-            }
-            return
-        }
-
-        let itemId = rawItemId.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("MyItems: deleting item rawId='\(rawItemId)' trimmed='\(itemId)'")
-
-        // Build the delete URL by appending the itemId as a path component to avoid encoding issues.
-        let base = "https://dealmatebackend.vercel.app/api/item"
-        guard let baseURL = URL(string: base) else {
-            await MainActor.run { loadError = "Invalid delete base URL" }
-            return
-        }
-
-        let url = baseURL.appendingPathComponent(itemId)
-        print("MyItems: delete URL -> \(url.absoluteString)")
-
-        await MainActor.run { isLoading = true; loadError = nil }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        print("MyItems: DELETE request headers -> \(request.allHTTPHeaderFields ?? [:])")
-
-        do {
-            let (respData, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse {
-                let body = String(data: respData, encoding: .utf8) ?? "(no body)"
-                print("MyItems: DELETE response status=\(http.statusCode) body=\(body)")
-
-                if (200...299).contains(http.statusCode) {
-                    await MainActor.run {
-                        if let idx = items.firstIndex(of: item) {
-                            items.remove(at: idx)
-                        }
-                        isLoading = false
-                    }
-                } else {
-                    await MainActor.run {
-                        loadError = "Delete failed: HTTP \(http.statusCode) - \(body)"
-                        isLoading = false
-                    }
+            if (200...299).contains(http.statusCode) {
+                // On success refresh items to pick up server IDs and canonical data
+                await getItems()
+                await MainActor.run {
+                    showAddSheet = false
+                    isLoading = false
                 }
             } else {
-                throw URLError(.badServerResponse)
+                await MainActor.run {
+                    loadError = "Post failed: HTTP \(http.statusCode) - \(respText)"
+                    isLoading = false
+                }
             }
         } catch {
             await MainActor.run {
@@ -418,107 +253,355 @@ struct MyItems: View {
             }
         }
     }
-}
-
-// MARK: - Add Item Sheet
-struct AddItemSheet: View {
-    @State private var newName = ""
-    @State private var newDescription = ""
-    @State private var selectedImage: UIImage? = nil
-    @State private var selectedItem: PhotosPickerItem? = nil
     
-    var onAdd: (Item) -> Void
-    var onCancel: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Add New Item")
-                .font(.headline)
-            
-            TextField("Item name", text: $newName)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-            
-            TextField("Description", text: $newDescription)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-            
-            // Image picker
-            PhotosPicker(
-                selection: $selectedItem,
-                matching: .images,
-                photoLibrary: .shared()
-            ) {
-                if let img = selectedImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 100, height: 100)
-                        .overlay(Text("Select Image").font(.caption))
-                }
-            }
-            .onChange(of: selectedItem) { _, newItem in
-                guard let newItem else { return }
-                Task {
-                    if let data = try? await newItem.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        selectedImage = uiImage
-                    }
-                }
-            }
-            
-            HStack {
-                Button("Cancel", action: onCancel)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(10)
-                
-                Button("Add") {
-                    let newItem = Item(name: newName, description: newDescription, image: selectedImage)
-                    onAdd(newItem)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(red: 28/255, green: 139/255, blue: 150/255))
-                .foregroundColor(.white)
-                .cornerRadius(10)
-            }
-            .padding(.horizontal)
-        }
-        .padding()
-    }
-}
+     func deleteItems(at indexSet: IndexSet) {
+         // For each selected index, call the async server delete.
+         let toDelete: [Item] = indexSet.compactMap { (idx: Int) -> Item? in
+             guard items.indices.contains(idx) else { return nil }
+             return items[idx]
+         }
 
+         for item in toDelete {
+             Task.detached {
+                 await deleteItem(item)
+             }
+         }
+     }
+     
+     func getItems() async {
+         let end_point = "https://dealmatebackend.vercel.app/api/item/"
+         
+         await MainActor.run { isLoading = true; loadError = nil }
+         
+         guard let url = URL(string: end_point) else {
+             await MainActor.run { loadError = "Invalid URL"; isLoading = false }
+             return
+         }
+         
+         var request = URLRequest(url: url)
+         request.httpMethod = "GET"
+         request.addValue("application/json", forHTTPHeaderField: "Accept")
+         if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+         }
+         
+         do {
+             let (data, response) = try await URLSession.shared.data(for: request)
+             guard let http = response as? HTTPURLResponse else {
+                 throw URLError(.badServerResponse)
+             }
+             
+             guard (200...299).contains(http.statusCode) else {
+                 let txt = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
+                 await MainActor.run { loadError = txt; isLoading = false }
+                 return
+             }
+             
+             // Robust APIItem decoder: accepts `id` or `_id`, string/int, or nested {$oid: "..."}
+             struct APIItem: Decodable {
+                 let id: String?
+                 let name: String?
+                 let description: String?
+                 let imageBase64: String?
+                 let image: String?
 
-// MARK: - PhotosPicker Extension
-extension View {
-    func photosPicker(selection: Binding<UIImage?>, matching: PHPickerFilter = .images) -> some View {
-        self.background(
-            PhotosPicker(
-                selection: Binding<PhotosPickerItem?>(
-                    get: { nil }, // always nil; we handle loading manually
-                    set: { newItem in
-                        guard let newItem else { return }
-                        Task {
-                            if let data = try? await newItem.loadTransferable(type: Data.self),
-                               let uiImage = UIImage(data: data) {
-                                selection.wrappedValue = uiImage
-                            }
-                        }
-                    }
-                ),
-                matching: matching,
-                photoLibrary: .shared()
-            ) {
-                EmptyView()
-            }
-            .opacity(0)
-        )
-    }
-}
+                 init(from decoder: Decoder) throws {
+                     let container = try decoder.container(keyedBy: CodingKeys.self)
+
+                     func decodeId(_ key: CodingKeys) -> String? {
+                         // Try decode String safely
+                         var maybeString: String? = nil
+                         do {
+                             maybeString = try container.decodeIfPresent(String.self, forKey: key)
+                         } catch {
+                             maybeString = nil
+                         }
+                         if let s = maybeString, !s.isEmpty {
+                             return s.trimmingCharacters(in: .whitespacesAndNewlines)
+                         }
+
+                         // Try decode Int safely
+                         var maybeInt: Int? = nil
+                         do {
+                             maybeInt = try container.decodeIfPresent(Int.self, forKey: key)
+                         } catch {
+                             maybeInt = nil
+                         }
+                         if let i = maybeInt {
+                             return String(i)
+                         }
+
+                         // Try nested object like { "$oid": "..." }
+                         var nestedContainer: KeyedDecodingContainer<DynamicKey>? = nil
+                         do {
+                             nestedContainer = try container.nestedContainer(keyedBy: DynamicKey.self, forKey: key)
+                         } catch {
+                             nestedContainer = nil
+                         }
+                         if let nested = nestedContainer, let dyn = DynamicKey(stringValue: "$oid") {
+                             var maybeOid: String? = nil
+                             do {
+                                 maybeOid = try nested.decodeIfPresent(String.self, forKey: dyn)
+                             } catch {
+                                 maybeOid = nil
+                             }
+                             if let oid = maybeOid, !oid.isEmpty {
+                                 return oid.trimmingCharacters(in: .whitespacesAndNewlines)
+                             }
+                         }
+
+                         return nil
+                     }
+
+                     var found = decodeId(.id)
+                     if found == nil { found = decodeId(.underscoreId) }
+                     self.id = found
+
+                     self.name = try? container.decodeIfPresent(String.self, forKey: .name)
+                     self.description = try? container.decodeIfPresent(String.self, forKey: .description)
+                     self.imageBase64 = try? container.decodeIfPresent(String.self, forKey: .imageBase64)
+                     self.image = try? container.decodeIfPresent(String.self, forKey: .image)
+                 }
+
+                 struct DynamicKey: CodingKey {
+                     var stringValue: String
+                     init?(stringValue: String) { self.stringValue = stringValue }
+                     var intValue: Int? { nil }
+                     init?(intValue: Int) { nil }
+                 }
+
+                 enum CodingKeys: String, CodingKey {
+                     case id
+                     case underscoreId = "_id"
+                     case name, description, imageBase64, image
+                 }
+             }
+
+             let decoder = JSONDecoder()
+
+             // Debug: print raw response preview
+             if let raw = String(data: data, encoding: .utf8) {
+                 print("MyItems: raw response preview -> \(raw.prefix(2000))")
+             }
+
+             // Try decoding array directly; if that fails try common wrappers
+             var apiItems: [APIItem] = []
+             if let arr = try? decoder.decode([APIItem].self, from: data) {
+                 apiItems = arr
+             } else if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                 let keys = ["data","items","result","payload"]
+                 for k in keys {
+                     if let arrAny = json[k] as? [[String: Any]], let arrData = try? JSONSerialization.data(withJSONObject: arrAny), let decoded = try? decoder.decode([APIItem].self, from: arrData) {
+                         apiItems = decoded
+                         break
+                     }
+                 }
+             }
+
+             if apiItems.isEmpty { print("MyItems: warning - no items decoded from response") }
+
+             var mapped: [Item] = []
+             for api in apiItems {
+                 let title = api.name ?? "Untitled"
+                 let desc = api.description ?? ""
+                 var uiImage: UIImage? = nil
+                 var imageSource: String? = nil
+
+                 if let src = (api.imageBase64 ?? api.image)?.trimmingCharacters(in: .whitespacesAndNewlines), !src.isEmpty {
+                     imageSource = src
+                     if !(src.lowercased().contains("://")) {
+                         uiImage = Base64ImageConverter.image(from: src)
+                     }
+                 }
+
+                 mapped.append(Item(itemId: api.id, name: title, description: desc, image: uiImage, imageSource: imageSource))
+                 print("MyItems: mapped item -> itemId=\(api.id ?? "(nil)"), name=\(title)")
+             }
+             
+             await MainActor.run {
+                 self.items = mapped
+                 self.isLoading = false
+             }
+         } catch {
+             await MainActor.run {
+                 self.loadError = error.localizedDescription
+                 self.isLoading = false
+             }
+         }
+     }
+     
+     // Deletes an item on the server (if it has an itemId). On success removes it from the local list.
+     func deleteItem(_ item: Item) async {
+         // If no item ID, just remove locally
+         guard let rawItemId = item.itemId, !rawItemId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+             await MainActor.run {
+                 if let idx = items.firstIndex(of: item) {
+                     items.remove(at: idx)
+                 }
+             }
+             return
+         }
+
+         let itemId = rawItemId.trimmingCharacters(in: .whitespacesAndNewlines)
+         print("MyItems: deleting item rawId='\(rawItemId)' trimmed='\(itemId)'")
+
+         // Build the delete URL by appending the itemId as a path component to avoid encoding issues.
+         let base = "https://dealmatebackend.vercel.app/api/item"
+         guard let baseURL = URL(string: base) else {
+             await MainActor.run { loadError = "Invalid delete base URL" }
+             return
+         }
+
+         let url = baseURL.appendingPathComponent(itemId)
+         print("MyItems: delete URL -> \(url.absoluteString)")
+
+         await MainActor.run { isLoading = true; loadError = nil }
+
+         var request = URLRequest(url: url)
+         request.httpMethod = "DELETE"
+         request.addValue("application/json", forHTTPHeaderField: "Accept")
+         if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+         }
+         print("MyItems: DELETE request headers -> \(request.allHTTPHeaderFields ?? [:])")
+
+         do {
+             let (respData, response) = try await URLSession.shared.data(for: request)
+             if let http = response as? HTTPURLResponse {
+                 let body = String(data: respData, encoding: .utf8) ?? "(no body)"
+                 print("MyItems: DELETE response status=\(http.statusCode) body=\(body)")
+
+                 if (200...299).contains(http.statusCode) {
+                     await MainActor.run {
+                         if let idx = items.firstIndex(of: item) {
+                             items.remove(at: idx)
+                         }
+                         isLoading = false
+                     }
+                 } else {
+                     await MainActor.run {
+                         loadError = "Delete failed: HTTP \(http.statusCode) - \(body)"
+                         isLoading = false
+                     }
+                 }
+             } else {
+                 throw URLError(.badServerResponse)
+             }
+         } catch {
+             await MainActor.run {
+                 loadError = error.localizedDescription
+                 isLoading = false
+             }
+         }
+     }
+ }
+ 
+ // MARK: - Add Item Sheet
+ struct AddItemSheet: View {
+     @State private var newName = ""
+     @State private var newDescription = ""
+     @State private var selectedImage: UIImage? = nil
+     @State private var selectedItem: PhotosPickerItem? = nil
+     
+     var onAdd: (Item) -> Void
+     var onCancel: () -> Void
+     
+     var body: some View {
+         VStack(spacing: 20) {
+             Text("Add New Item")
+                 .font(.headline)
+             
+             // Improved input styling
+             TextField("Item name", text: $newName)
+                 .padding(10)
+                 .background(Color(.systemGray6))
+                 .cornerRadius(8)
+                 .padding(.horizontal)
+             
+             TextField("Description", text: $newDescription)
+                 .padding(10)
+                 .background(Color(.systemGray6))
+                 .cornerRadius(8)
+                 .padding(.horizontal)
+             
+             // Image picker
+             PhotosPicker(
+                 selection: $selectedItem,
+                 matching: .images,
+                 photoLibrary: .shared()
+             ) {
+                 if let img = selectedImage {
+                     Image(uiImage: img)
+                         .resizable()
+                         .scaledToFill()
+                         .frame(width: 100, height: 100)
+                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                 } else {
+                     RoundedRectangle(cornerRadius: 8)
+                         .fill(Color.gray.opacity(0.2))
+                         .frame(width: 100, height: 100)
+                         .overlay(Text("Select Image").font(.caption))
+                 }
+             }
+             .onChange(of: selectedItem) { _, newItem in
+                 guard let newItem else { return }
+                 Task {
+                     if let data = try? await newItem.loadTransferable(type: Data.self),
+                        let uiImage = UIImage(data: data) {
+                         selectedImage = uiImage
+                     }
+                 }
+             }
+             
+             HStack {
+                 Button("Cancel", action: onCancel)
+                     .frame(maxWidth: .infinity)
+                     .padding()
+                     .background(Color.gray.opacity(0.2))
+                     .cornerRadius(10)
+                 
+                 Button("Add") {
+                     let newItem = Item(name: newName, description: newDescription, image: selectedImage)
+                     onAdd(newItem)
+                 }
+                 .frame(maxWidth: .infinity)
+                 .padding()
+                 // Enable when name and description are present; image is optional (sent as "" if nil)
+                 .background((newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || newDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? Color.gray.opacity(0.5) : Color(red: 28/255, green: 139/255, blue: 150/255))
+                 .foregroundColor(.white)
+                 .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || newDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                 .cornerRadius(10)
+             }
+             .padding(.horizontal)
+         }
+         .padding()
+     }
+ }
+ 
+ 
+ // MARK: - PhotosPicker Extension
+ extension View {
+     func photosPicker(selection: Binding<UIImage?>, matching: PHPickerFilter = .images) -> some View {
+         self.background(
+             PhotosPicker(
+                 selection: Binding<PhotosPickerItem?>(
+                     get: { nil }, // always nil; we handle loading manually
+                     set: { newItem in
+                         guard let newItem else { return }
+                         Task {
+                             if let data = try? await newItem.loadTransferable(type: Data.self),
+                                let uiImage = UIImage(data: data) {
+                                 selection.wrappedValue = uiImage
+                             }
+                         }
+                     }
+                 ),
+                 matching: matching,
+                 photoLibrary: .shared()
+             ) {
+                 EmptyView()
+             }
+             .opacity(0)
+         )
+     }
+ }
